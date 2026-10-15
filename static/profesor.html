@@ -4581,11 +4581,18 @@
     </div>
 
     <!-- Modal compartido: elegir dia destino para copiar/duplicar un bloque o el calentamiento -->
+    <style>
+        .pf-copiar-op input[type="checkbox"] { width: 18px; height: 18px; accent-color: #FF6B35; flex-shrink: 0; cursor: pointer; }
+        .pf-copiar-op-todos { border: 1px dashed rgba(255,255,255,0.18); font-weight: 700; }
+        #modal-copiar-confirmar:disabled { opacity: .45; cursor: not-allowed; }
+    </style>
     <div id="modal-copiar-destino" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-tarjeta rounded-2xl border border-borde p-5 max-w-sm w-full">
-            <h3 id="modal-copiar-titulo" class="text-sm font-bold text-texto uppercase tracking-wider mb-4">Copiar a...</h3>
+            <h3 id="modal-copiar-titulo" class="text-sm font-bold text-texto uppercase tracking-wider mb-2">Copiar a...</h3>
+            <p id="modal-copiar-ayuda" class="hidden text-xs text-textoSuave mb-3"></p>
             <div id="modal-copiar-opciones" class="space-y-2 mb-4 max-h-64 overflow-y-auto"></div>
-            <button onclick="document.getElementById('modal-copiar-destino').classList.add('hidden')" class="w-full py-2.5 rounded-xl border border-borde text-textoSuave text-sm hover:text-texto transition">Cancelar</button>
+            <button id="modal-copiar-confirmar" onclick="_pfConfirmarCopiarSeleccion()" class="hidden w-full py-2.5 mb-2 rounded-xl btn-primary text-white font-bold text-sm">Copiar</button>
+            <button onclick="_pfCerrarModalCopiar()" class="w-full py-2.5 rounded-xl border border-borde text-textoSuave text-sm hover:text-texto transition">Cancelar</button>
         </div>
     </div>
 
@@ -20558,26 +20565,19 @@ Extraé TODOS los ejercicios que sean ejercicios reales. Si un ejercicio aparece
     function abrirModalCopiarBloqueDesdeHistorial(histDiaIdx, bloqueIdx) {
         if (!_pfHistorialParseado) return;
         _pfCopiarContexto = { tipo: 'bloque', diaIdx: histDiaIdx, bloqueIdx, origenExterno: _pfHistorialParseado };
-        document.getElementById('modal-copiar-titulo').textContent = 'Copiar bloque a...';
-        const opciones = document.getElementById('modal-copiar-opciones');
-        opciones.innerHTML = diasData.map((d, i) =>
-            '<button onclick="_pfConfirmarCopiar(' + i + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + d.titulo + '</button>'
-        ).join('');
-        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+        const items = diasData.map((d, i) => ({ idx: i, label: d.titulo }));
+        _pfAbrirModalCopiar('Copiar bloque a...', 'Elegí uno o varios días. El bloque se agrega al final de cada día elegido; no se modifica nada más.', items, true);
     }
 
     // Abre el selector de dia destino para copiar el calentamiento de una rutina historica
     function abrirModalCopiarCalentamientoDesdeHistorial(histDiaIdx) {
         if (!_pfHistorialParseado) return;
         _pfCopiarContexto = { tipo: 'calentamiento', diaIdx: histDiaIdx, origenExterno: _pfHistorialParseado };
-        document.getElementById('modal-copiar-titulo').textContent = 'Copiar calentamiento a...';
-        const opciones = document.getElementById('modal-copiar-opciones');
-        opciones.innerHTML = diasData.map((d, i) => {
+        const items = diasData.map((d, i) => {
             const tieneCal = d.warmupEjercicios && d.warmupEjercicios.length > 0;
-            const label = d.titulo + (tieneCal ? ' (se reemplaza el actual)' : '');
-            return '<button onclick="_pfConfirmarCopiar(' + i + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + label + '</button>';
-        }).join('');
-        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+            return { idx: i, label: d.titulo, aviso: tieneCal ? 'reemplaza el actual' : '' };
+        });
+        _pfAbrirModalCopiar('Copiar calentamiento a...', 'Elegí uno o varios días. Solo se reemplaza el calentamiento; los bloques no se tocan.', items, true);
     }
 
     // Version "pura" del parseo usado en editarRutinaDesdeHistorial: en vez de reemplazar
@@ -20869,45 +20869,26 @@ Extraé TODOS los ejercicios que sean ejercicios reales. Si un ejercicio aparece
 
     function abrirModalCopiarBloque(diaIdx, bloqueIdx) {
         _pfCopiarContexto = { tipo: 'bloque', diaIdx, bloqueIdx };
-        document.getElementById('modal-copiar-titulo').textContent = 'Duplicar bloque a...';
-        const opciones = document.getElementById('modal-copiar-opciones');
-        opciones.innerHTML = diasData.map((d, i) => {
-            const label = (i === diaIdx) ? (d.titulo + ' (este día · duplicar acá)') : d.titulo;
-            return '<button onclick="_pfConfirmarCopiar(' + i + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + label + '</button>';
-        }).join('');
-        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+        const items = diasData.map((d, i) => ({ idx: i, label: d.titulo, aviso: (i === diaIdx) ? 'este día · duplica acá' : '' }));
+        _pfAbrirModalCopiar('Copiar bloque a...', 'Elegí uno o varios días. El bloque se agrega al final de cada día elegido; no se modifica nada más.', items, true);
     }
 
     function abrirModalTrasladarBloque(diaIdx, bloqueIdx) {
         _pfCopiarContexto = { tipo: 'bloque-mover', diaIdx, bloqueIdx };
-        document.getElementById('modal-copiar-titulo').textContent = 'Trasladar bloque a...';
-        const opciones = document.getElementById('modal-copiar-opciones');
-        const otrosDias = diasData.map((d, i) => i).filter(i => i !== diaIdx);
-        if (otrosDias.length === 0) {
-            opciones.innerHTML = '<p class="text-xs text-textoSuave">No hay otros días a los que trasladar.</p>';
-        } else {
-            opciones.innerHTML = otrosDias.map(i => {
-                return '<button onclick="_pfConfirmarCopiar(' + i + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + diasData[i].titulo + '</button>';
-            }).join('');
-        }
-        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+        const items = [];
+        diasData.forEach((d, i) => { if (i !== diaIdx) items.push({ idx: i, label: d.titulo }); });
+        _pfAbrirModalCopiar('Trasladar bloque a...', '', items, false);
     }
 
     function abrirModalCopiarCalentamiento(diaIdx) {
         _pfCopiarContexto = { tipo: 'calentamiento', diaIdx };
-        document.getElementById('modal-copiar-titulo').textContent = 'Copiar calentamiento a...';
-        const opciones = document.getElementById('modal-copiar-opciones');
-        const otrosDias = diasData.map((d, i) => i).filter(i => i !== diaIdx);
-        if (otrosDias.length === 0) {
-            opciones.innerHTML = '<p class="text-xs text-textoSuave">No hay otros días para copiar.</p>';
-        } else {
-            opciones.innerHTML = otrosDias.map(i => {
-                const tieneCal = diasData[i].warmupEjercicios && diasData[i].warmupEjercicios.length > 0;
-                const label = diasData[i].titulo + (tieneCal ? ' (se reemplaza el actual)' : '');
-                return '<button onclick="_pfConfirmarCopiar(' + i + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + label + '</button>';
-            }).join('');
-        }
-        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+        const items = [];
+        diasData.forEach((d, i) => {
+            if (i === diaIdx) return;
+            const tieneCal = d.warmupEjercicios && d.warmupEjercicios.length > 0;
+            items.push({ idx: i, label: d.titulo, aviso: tieneCal ? 'reemplaza el actual' : '' });
+        });
+        _pfAbrirModalCopiar('Copiar calentamiento a...', 'Elegí uno o varios días. Solo se reemplaza el calentamiento; los bloques no se tocan.', items, true);
     }
 
     // ====================================================================
@@ -20945,58 +20926,161 @@ Extraé TODOS los ejercicios que sean ejercicios reales. Si un ejercicio aparece
         document.getElementById('modal-aviso-prohibidos-copia').classList.remove('hidden');
     }
 
-    async function _pfConfirmarCopiar(targetIdx) {
+    function _pfCerrarModalCopiar() {
+        const m = document.getElementById('modal-copiar-destino');
+        if (m) m.classList.add('hidden');
+        _pfCopiarContexto = null;
+    }
+
+    // Abre el selector de destino. items = [{ idx, label, aviso? }]. multi=true -> casillas
+    // (varios días a la vez + "Todos los días"); multi=false -> un botón por día (trasladar).
+    function _pfAbrirModalCopiar(titulo, ayuda, items, multi) {
+        document.getElementById('modal-copiar-titulo').textContent = titulo;
+        const ayudaEl = document.getElementById('modal-copiar-ayuda');
+        if (ayudaEl) { ayudaEl.textContent = ayuda || ''; ayudaEl.classList.toggle('hidden', !ayuda); }
+        const opciones = document.getElementById('modal-copiar-opciones');
+        const btn = document.getElementById('modal-copiar-confirmar');
+        const filaCls = 'pf-copiar-op flex items-center gap-3 w-full px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto cursor-pointer transition';
+        if (!items.length) {
+            opciones.innerHTML = '<p class="text-xs text-textoSuave">No hay otros días disponibles. Agregá un día primero.</p>';
+            if (btn) btn.classList.add('hidden');
+        } else if (multi) {
+            let html = '';
+            if (items.length > 1) {
+                html += '<label class="' + filaCls + ' pf-copiar-op-todos"><input type="checkbox" id="pf-copiar-todos" onchange="_pfCopiarToggleTodos(this.checked)"><span class="flex-1">Todos los días</span></label>';
+            }
+            html += items.map(it =>
+                '<label class="' + filaCls + '"><input type="checkbox" class="pf-copiar-chk" value="' + it.idx + '" onchange="_pfCopiarActualizarSeleccion()">' +
+                '<span class="flex-1">' + escapeHtml(it.label) + '</span>' +
+                (it.aviso ? '<span class="text-[11px] text-amarillo">' + escapeHtml(it.aviso) + '</span>' : '') + '</label>'
+            ).join('');
+            opciones.innerHTML = html;
+            if (btn) btn.classList.remove('hidden');
+            _pfCopiarActualizarSeleccion();
+        } else {
+            opciones.innerHTML = items.map(it =>
+                '<button onclick="_pfConfirmarCopiar(' + it.idx + ')" class="w-full text-left px-4 py-2.5 rounded-lg bg-fondoAlt hover:bg-borde text-sm text-texto transition">' + escapeHtml(it.label) + '</button>'
+            ).join('');
+            if (btn) btn.classList.add('hidden');
+        }
+        document.getElementById('modal-copiar-destino').classList.remove('hidden');
+    }
+
+    function _pfCopiarSeleccionados() {
+        return Array.from(document.querySelectorAll('#modal-copiar-opciones .pf-copiar-chk:checked')).map(c => parseInt(c.value, 10));
+    }
+
+    function _pfCopiarToggleTodos(checked) {
+        document.querySelectorAll('#modal-copiar-opciones .pf-copiar-chk').forEach(c => { c.checked = !!checked; });
+        _pfCopiarActualizarSeleccion();
+    }
+
+    function _pfCopiarActualizarSeleccion() {
+        const todos = Array.from(document.querySelectorAll('#modal-copiar-opciones .pf-copiar-chk'));
+        const sel = todos.filter(c => c.checked).length;
+        const btn = document.getElementById('modal-copiar-confirmar');
+        if (btn) {
+            btn.disabled = (sel === 0);
+            btn.textContent = sel === 0 ? 'Elegí al menos un día' : ('Copiar a ' + sel + (sel === 1 ? ' día' : ' días'));
+        }
+        const chkTodos = document.getElementById('pf-copiar-todos');
+        if (chkTodos) {
+            chkTodos.checked = (todos.length > 0 && sel === todos.length);
+            chkTodos.indeterminate = (sel > 0 && sel < todos.length);
+        }
+    }
+
+    function _pfConfirmarCopiarSeleccion() {
+        return _pfConfirmarCopiar(_pfCopiarSeleccionados());
+    }
+
+    // targets: un indice de día o un array de índices. Copiar bloque/calentamiento solo toca
+    // lo que se copia en los días destino; el resto de cada día queda intacto.
+    async function _pfConfirmarCopiar(targets) {
         if (!_pfCopiarContexto) return;
         const ctx = _pfCopiarContexto;
+        const lista = Array.from(new Set((Array.isArray(targets) ? targets : [targets])
+            .map(n => parseInt(n, 10)).filter(i => Number.isInteger(i) && diasData[i])));
+        if (!lista.length) { toast('Elegí al menos un día'); return; }
         const origenDias = ctx.origenExterno || diasData; // de donde se copia: rutina actual o una historica parseada
+        const clonar = (o) => JSON.parse(JSON.stringify(o));
+        const nombresDe = (arr) => arr.map(i => diasData[i].titulo).join(', ');
+
         if (ctx.tipo === 'bloque') {
             const bloqueOriginal = origenDias[ctx.diaIdx] && origenDias[ctx.diaIdx].bloquesRutina[ctx.bloqueIdx];
-            if (!bloqueOriginal) return;
-            const destinoLabel = diasData[targetIdx].titulo + (targetIdx === ctx.diaIdx && !ctx.origenExterno ? ' (este mismo día)' : '');
-            if (!await pfConfirm('¿Copiar este bloque a ' + destinoLabel + '?', { destructivo: false, textoConfirmar: 'Copiar' })) return;
-            const copia = JSON.parse(JSON.stringify(bloqueOriginal));
-            diasData[targetIdx].bloquesRutina.push(copia);
-            renderBloquesDia(targetIdx);
-            actualizarBadgeDia(targetIdx);
-            toast('Bloque copiado a ' + diasData[targetIdx].titulo);
-            _pfAvisarSiProhibidosEnCopia(copia.ejercicios || []);
-            document.getElementById('modal-copiar-destino').classList.add('hidden');
-            _pfCopiarContexto = null;
+            if (!bloqueOriginal) { toast('No se encontró el bloque a copiar'); return; }
+            const base = clonar(bloqueOriginal);
+            _pfGuardarUndoSnapshot('copiar bloque');
+            lista.forEach(t => {
+                diasData[t].bloquesRutina.push(clonar(base));
+                renderBloquesDia(t);
+                actualizarBadgeDia(t);
+            });
+            _pfCerrarModalCopiar();
+            toastConDeshacer('Bloque copiado a ' + nombresDe(lista));
+            _pfAvisarSiProhibidosEnCopia(base.ejercicios || []);
             return;
-        } else if (ctx.tipo === 'bloque-mover') {
+        }
+
+        if (ctx.tipo === 'bloque-mover') {
+            const t = lista[0];
             const diaOrigen = diasData[ctx.diaIdx];
             const bloqueOriginal = diaOrigen && diaOrigen.bloquesRutina[ctx.bloqueIdx];
-            if (!bloqueOriginal) return;
-            if (!await pfConfirm('¿Trasladar este bloque a ' + diasData[targetIdx].titulo + '? Se quitará de ' + diaOrigen.titulo + '.', { destructivo: false, textoConfirmar: 'Trasladar' })) return;
+            if (!bloqueOriginal || t === ctx.diaIdx) return;
+            if (!await pfConfirm('¿Trasladar este bloque a ' + diasData[t].titulo + '? Se quitará de ' + diaOrigen.titulo + '.', { destructivo: false, textoConfirmar: 'Trasladar' })) return;
             const [bloqueMovido] = diaOrigen.bloquesRutina.splice(ctx.bloqueIdx, 1);
-            diasData[targetIdx].bloquesRutina.push(bloqueMovido);
+            diasData[t].bloquesRutina.push(bloqueMovido);
             renderBloquesDia(ctx.diaIdx);
-            renderBloquesDia(targetIdx);
+            renderBloquesDia(t);
             actualizarBadgeDia(ctx.diaIdx);
-            actualizarBadgeDia(targetIdx);
-            toast('Bloque trasladado a ' + diasData[targetIdx].titulo);
-            document.getElementById('modal-copiar-destino').classList.add('hidden');
-            _pfCopiarContexto = null;
+            actualizarBadgeDia(t);
+            toast('Bloque trasladado a ' + diasData[t].titulo);
+            _pfCerrarModalCopiar();
             return;
-        } else if (ctx.tipo === 'calentamiento') {
-            // El chequeo de "mismo dia" solo aplica cuando se copia dentro de la rutina actual
-            if (!ctx.origenExterno && targetIdx === ctx.diaIdx) { toast('Elegí un día distinto'); return; }
-            if (!await pfConfirm('¿Copiar el calentamiento a ' + diasData[targetIdx].titulo + '?', { destructivo: false, textoConfirmar: 'Copiar' })) return;
-            const origen = origenDias[ctx.diaIdx];
-            if (!origen) return;
-            diasData[targetIdx].warmupEjercicios = JSON.parse(JSON.stringify(origen.warmupEjercicios || []));
-            diasData[targetIdx]._warmupCfg = JSON.parse(JSON.stringify(origen._warmupCfg || origen._wCfg || {}));
-            const tipoOrigen = ctx.origenExterno
-                ? (origen._wTipo || 'Circuito (Vueltas)')
-                : (document.getElementById('warmup-tipo-' + ctx.diaIdx)?.value || (origen._warmupCfg && origen._warmupCfg.tipo) || 'Circuito (Vueltas)');
-            const tipoSelDestino = document.getElementById('warmup-tipo-' + targetIdx);
-            if (tipoSelDestino) tipoSelDestino.value = tipoOrigen;
-            actualizarWarmupUIDia(targetIdx); // regenera params y re-renderiza ejercicios
-            toast('Calentamiento copiado a ' + diasData[targetIdx].titulo);
-            _pfAvisarSiProhibidosEnCopia(diasData[targetIdx].warmupEjercicios || []);
         }
-        document.getElementById('modal-copiar-destino').classList.add('hidden');
-        _pfCopiarContexto = null;
+
+        if (ctx.tipo === 'calentamiento') {
+            // El día de origen no puede ser destino (solo aplica al copiar dentro de la rutina actual)
+            const destinos = ctx.origenExterno ? lista : lista.filter(i => i !== ctx.diaIdx);
+            if (!destinos.length) { toast('Elegí un día distinto'); return; }
+            const origen = origenDias[ctx.diaIdx];
+            if (!origen) { toast('No se encontró el calentamiento a copiar'); return; }
+            if (!ctx.origenExterno) guardarWarmupCfgDia(ctx.diaIdx); // sincroniza parámetros en vivo antes de leerlos
+            const ejsOrigen = origen.warmupEjercicios || [];
+            if (!ejsOrigen.length) { toast('El calentamiento de origen está vacío'); return; }
+            const reemplazan = destinos.filter(i => (diasData[i].warmupEjercicios || []).length > 0);
+            if (reemplazan.length) {
+                if (!await pfConfirm('Se reemplazará el calentamiento actual de ' + nombresDe(reemplazan) + '. ¿Copiar igual?', { destructivo: false, textoConfirmar: 'Copiar' })) return;
+            }
+            const cfgOrigen = clonar(origen._warmupCfg || origen._wCfg || {});
+            const tipoOrigen = cfgOrigen.tipo || origen._wTipo
+                || (!ctx.origenExterno && document.getElementById('warmup-tipo-' + ctx.diaIdx)?.value) || 'Circuito (Vueltas)';
+            cfgOrigen.tipo = tipoOrigen;
+            const emomOrigen = clonar(origen.warmupEmomConfig || []);
+            const cicloOrigen = origen.warmupEmomCiclo;
+            _pfGuardarUndoSnapshot('copiar calentamiento');
+            destinos.forEach(t => {
+                const d = diasData[t];
+                const nuevos = clonar(ejsOrigen);
+                // en el mismo array (no se reasigna) para no romper referencias existentes
+                if (Array.isArray(d.warmupEjercicios)) d.warmupEjercicios.splice(0, d.warmupEjercicios.length, ...nuevos);
+                else d.warmupEjercicios = nuevos;
+                d.warmupEmomConfig = clonar(emomOrigen); // EMOM: ejercicios por minuto
+                if (cicloOrigen !== undefined && cicloOrigen !== null) d.warmupEmomCiclo = cicloOrigen; else delete d.warmupEmomCiclo;
+                d._warmupCfg = clonar(cfgOrigen);
+                const selTipo = document.getElementById('warmup-tipo-' + t);
+                if (selTipo) selTipo.value = tipoOrigen;
+                actualizarWarmupUIDia(t); // regenera parámetros y re-renderiza ejercicios
+                renderWarmupEjsDia(t);
+                actualizarResumenCalentamientoDia(t);
+                actualizarBadgeDia(t);
+            });
+            _pfCerrarModalCopiar();
+            toastConDeshacer('Calentamiento copiado a ' + nombresDe(destinos));
+            _pfAvisarSiProhibidosEnCopia(ejsOrigen);
+            return;
+        }
+        _pfCerrarModalCopiar();
     }
 
     // ====================================================================
@@ -22799,6 +22883,7 @@ self.addEventListener('fetch', event => {
                             '<span class="pf-ref-block-ico" style="background:'+wc+';">'+(wTipo ? typeIcon(wTipo) : '🔥')+'</span>'+
                             '<span><b>'+e(wTipo ? typeLabel(wTipo) : 'Calentamiento')+'</b><small>'+e(wCantLabel+(wDetalle ? ' · '+wDetalle : ''))+'</small></span>'+
                             '<span class="pf-ref-block-tools" style="margin-left:auto;display:flex;align-items:center;gap:2px;">'+
+                                '<button type="button" onclick="pfRefCopyWarmup()" title="Copiar calentamiento a otros días" style="margin-left:0;">⧉</button>'+
                                 '<button onclick="pfRefEditWarmup()" title="Editar calentamiento" style="margin-left:0;">✎</button>'+
                                 '<button onclick="pfRefDeleteWarmup()" title="Eliminar calentamiento" style="margin-left:0;color:#ff6b6b;">🗑</button>'+
                             '</span>'+
@@ -22826,6 +22911,7 @@ self.addEventListener('fetch', event => {
                             '<span class="pf-ref-block-tools" style="margin-left:auto;display:flex;align-items:center;gap:2px;">'+
                                 '<button type="button" onclick="pfRefMoveBlock('+i+',-1)" title="Subir" style="margin-left:0;'+(subirOff?'opacity:.25;pointer-events:none;':'')+'">▲</button>'+
                                 '<button type="button" onclick="pfRefMoveBlock('+i+',1)" title="Bajar" style="margin-left:0;'+(bajarOff?'opacity:.25;pointer-events:none;':'')+'">▼</button>'+
+                                '<button type="button" onclick="pfRefCopyBlock('+i+')" title="Copiar bloque a otros días" style="margin-left:0;">⧉</button>'+
                                 '<button onclick="pfRefEditBlock('+i+')" title="Editar bloque, incluido cambiar de sistema" style="margin-left:0;">✎</button>'+
                                 '<button type="button" onclick="pfRefDeleteBlock('+i+')" title="Eliminar bloque" style="margin-left:0;color:#ff6b6b;">🗑</button>'+
                             '</span>'+
@@ -22994,6 +23080,11 @@ self.addEventListener('fetch', event => {
             },80);
         };
         window.pfRefEditBlock=function(i){ if(typeof editarBloqueDia==='function') editarBloqueDia(_pfRefDay,i); };
+        // Copiar a otros días: reusa el selector múltiple (abrirModalCopiarBloque /
+        // abrirModalCopiarCalentamiento). Esta pantalla se repinta sola (setInterval),
+        // así que las copias se ven apenas se confirman.
+        window.pfRefCopyBlock=function(i){ if(typeof abrirModalCopiarBloque==='function') abrirModalCopiarBloque(_pfRefDay,i); };
+        window.pfRefCopyWarmup=function(){ if(typeof abrirModalCopiarCalentamiento==='function') abrirModalCopiarCalentamiento(_pfRefDay); };
         // Cambia el orden de un bloque dentro del día activo (subir/bajar). Reusa
         // moverEjercicio/getDataArray, que ya saben mover un item dentro de
         // diasData[_pfRefDay].bloquesRutina sin duplicar esa lógica; después se
